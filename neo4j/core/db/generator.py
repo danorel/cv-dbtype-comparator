@@ -2,16 +2,13 @@ import math
 import string
 import random
 
-from connector import Neo4jConnection
-
-
 Schema = {
     'name': 'Root',
     'properties': [
         {
             'name': 'User',
-            'count_from': 1000,
-            'count_to': 1000,
+            'min_items': 1000,
+            'max_items': 1000,
             'properties': [
                 {
                     'name': 'login',
@@ -27,8 +24,8 @@ Schema = {
                 },
                 {
                     'name': 'CV',
-                    'count_from': 1,
-                    'count_to': 5,
+                    'min_items': 1,
+                    'max_items': 5,
                     'properties': [
                         {
                             'name': 'title',
@@ -38,8 +35,8 @@ Schema = {
                         },
                         {
                             'name': 'Hobby',
-                            'count_from': 1,
-                            'count_to': 5,
+                            'min_items': 1,
+                            'max_items': 5,
                             'properties': [
                                 {
                                     'name': 'title',
@@ -51,8 +48,8 @@ Schema = {
                         },
                         {
                             'name': 'Company',
-                            'count_from': 1,
-                            'count_to': 3,
+                            'min_items': 1,
+                            'max_items': 3,
                             'properties': [
                                 {
                                     'name': 'title',
@@ -62,8 +59,8 @@ Schema = {
                                 },
                                 {
                                     'name': 'City',
-                                    'count_from': 0,
-                                    'count_to': 1,
+                                    'min_items': 0,
+                                    'max_items': 1,
                                     'properties': [
                                         {
                                             'name': 'title',
@@ -173,21 +170,3 @@ class Neo4jGenerator:
     def __repr__(self):
         return f"Neo4j probability: {self.__cache_probability}"
 
-
-def Neo4jInitializer(connection: Neo4jConnection, generator: Neo4jGenerator):
-    root_data = generator.random(Schema)
-    print(root_data)
-    # for root_instance in root_data:
-    #     user = root_instance.get('User')
-    #     for user_cv in user_cvs:
-    #         connection.query(f"""
-    #             CREATE
-    #             (p:User{{
-    #                 login: \"{root_instance.get('login')}\",
-    #                 password: \"{root_instance.get('password')}\"
-    #                 }})
-    #                 -[:HAS]->
-    #                 (t:CV{{
-    #                     title: \"{user_cv}\"
-    #                 }})
-    #             """)

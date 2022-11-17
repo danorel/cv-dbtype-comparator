@@ -1,6 +1,26 @@
 from core.server import app
-from core.db.generator import Neo4jGenerator, Neo4jInitializer
+from core.db.generator import Neo4jGenerator, Schema
 from core.db.connector import Neo4jConnection
+
+
+def Neo4jInitializer(connection: Neo4jConnection, generator: Neo4jGenerator):
+    root = generator.random(Schema)
+
+    users = root.get('User')
+    for user in users:
+        cvs = user.get('CV')
+        for cv in cvs:
+            connection.query(f"""
+                CREATE
+                (p:User{{
+                    login: \"{user.get('login')}\",
+                    password: \"{user.get('password')}\"
+                }})
+                -[:HAS]->
+                (t:CV{{
+                    title: \"{cv.get('title')}\"
+                }})
+            """)
 
 
 def main():
@@ -10,7 +30,7 @@ def main():
                                      pwd="supersecretpassword")
         generator = Neo4jGenerator()
         Neo4jInitializer(connection, generator)
-        # conn.query("""MATCH (n) DETACH DELETE n""")
+        # connection.query("""MATCH (n) DETACH DELETE n""")
         connection.close()
     except Exception as e:
         return f"Error. {e}"

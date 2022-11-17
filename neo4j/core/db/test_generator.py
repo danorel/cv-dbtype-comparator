@@ -73,5 +73,4 @@ class TestNeo4jGenerator(TestCase):
                 }
             ]
         })
-        print(data)
         self.failUnlessEqual(len(data.get('User')), 1000)
