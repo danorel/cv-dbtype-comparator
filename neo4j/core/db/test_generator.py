@@ -60,12 +60,14 @@ class TestNeo4jGenerator(TestCase):
                             'name': 'CV',
                             'min_items': 0,
                             'max_items': 3,
+                            'cache': True,
                             'properties': [
                                 {
                                     'name': 'title',
                                     'instance': 'str',
                                     'range_from': 5,
-                                    'range_to': 15
+                                    'range_to': 15,
+                                    'cache': True
                                 }
                             ]
                         }

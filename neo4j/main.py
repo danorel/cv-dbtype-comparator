@@ -38,6 +38,7 @@ Schema = {
                             'name': 'Hobby',
                             'min_items': 1,
                             'max_items': 5,
+                            'cache': True,
                             'properties': [
                                 {
                                     'name': 'title',
@@ -51,6 +52,7 @@ Schema = {
                             'name': 'Company',
                             'min_items': 1,
                             'max_items': 3,
+                            'cache': True,
                             'properties': [
                                 {
                                     'name': 'title',
@@ -82,64 +84,132 @@ Schema = {
 }
 
 
-def Neo4jInitializer(connection: Neo4jConnection, generator: Neo4jGenerator):
+def neo4jInitializer(connection: Neo4jConnection, generator: Neo4jGenerator):
     root = generator.random(Schema)
-
-    users = root.get('User', [])
-    for user in users:
-        cvs = user.get('CV', [])
-        for cv in cvs:
-            connection.query(f"""
+    for user in root.get('User', []):
+        for cv in user.get('CV', []):
+            [cv_id] = connection.query(f"""
                 CREATE
-                (p:User{{
+                (us:User{{
                     login: \"{user.get('login')}\",
                     password: \"{user.get('password')}\"
                 }})
                 -[:HAS]->
-                (t:CV{{
+                (cv:CV{{
                     title: \"{cv.get('title')}\"
                 }})
+                RETURN ID(cv)
             """)
-            hobbies = cv.get('Hobby', [])
-            for hobby in hobbies:
+            for hobby in cv.get('Hobby', []):
                 connection.query(f"""
+                    MATCH
+                    (cv:CV)
+                    WHERE ID(cv) = {cv_id.value()}
                     CREATE
-                    (p:CV{{
-                        title: \"{cv.get('title')}\"
-                    }})
+                    (cv)
                     -[:HAS]->
-                    (t:Hobby{{
+                    (hb:Hobby{{
                         title: \"{hobby.get('title')}\"
                     }})
                 """)
-            companies = cv.get('Company', [])
-            for company in companies:
-                connection.query(f"""
+            for company in cv.get('Company', []):
+                [company_id] = connection.query(f"""
+                    MATCH
+                    (cv:CV)
+                    WHERE ID(cv) = {cv_id.value()}
                     CREATE
-                    (p:CV{{
-                        title: \"{cv.get('title')}\"
-                    }})
+                    (cv)
                     -[:HAS]->
-                    (t:Company{{
+                    (cp:Company{{
                         title: \"{company.get('title')}\"
                     }})
+                    RETURN ID(cp)
                 """)
-                cities = company.get('City', [])
-                for city in cities:
+                for city in company.get('City', []):
                     connection.query(f"""
+                        MATCH
+                        (cp:Company)
+                        WHERE ID(cp) = {company_id.value()}
                         CREATE
-                        (p:Company{{
-                            title: \"{company.get('title')}\"
-                        }})
+                        (cp)
                         -[:IN]->
-                        (t:City{{
+                        (ct:City{{
                             title: \"{city.get('title')}\"
                         }})
                     """)
 
 
-def Neo4jRemover(connection: Neo4jConnection):
-    connection.query("""MATCH (n) DETACH DELETE n""")
+def neo4jRemover(connection: Neo4jConnection):
+    connection.query("""
+        MATCH (n) 
+        DETACH DELETE n
+    """)
+
+
+def neo4jQuerySimulator(connection: Neo4jConnection):
+    # Query #1: забрати рюзюме
+    search_user_cv = connection.query("""
+        MATCH 
+        (us:User)
+        -[:HAS]->
+        (cv:CV)
+        WHERE us.login =~ "^A.*" AND
+              cv.title =~ "^A.*"
+        RETURN cv
+    """)
+    app.logger.info(f"CV of User 'A*' in CV with title 'A*': {search_user_cv}")
+
+    # Query #2: забрати всі хоббі які існують в резюме
+    search_user_hobbies = connection.query("""
+        MATCH 
+        (us:User)
+        -[:HAS]->
+        (cv:CV)
+        -[:HAS]->
+        (hb:Hobby)
+        WHERE us.login =~ "^A.*" AND
+              cv.title =~ "^A.*"
+        RETURN hb
+    """)
+    app.logger.info(f"Hobbies of User 'A*' in CV with title 'A*': {search_user_hobbies}")
+
+    # Query #3: забрати всі міста, що зустрічаються в резюме
+    search_user_cities = connection.query("""
+        MATCH 
+        (us:User)
+        -[:HAS]->
+        (cv:CV)
+        -[:HAS]->
+        (ct:City)
+        WHERE us.login =~ "^A.*" AND
+              cv.title =~ "^A.*"
+        RETURN ct
+    """)
+    app.logger.info(f"Cities of User 'A*' in CV with title 'A*': {search_user_cities}")
+
+    # Query #4: забрати хоббі всіх здобувачів, що мешкають в заданому місті
+    search_all_hobbies = connection.query("""
+        MATCH 
+        (us:User)
+        -[:HAS]->
+        (cv:CV)
+        -[:HAS]->
+        (hb:Hobby),
+        (cp:Company)
+            -[:IN]->
+            (ct:City)
+        WHERE ct.title =~ "^AB.*"
+        RETURN hb, ct
+    """)
+    app.logger.info(f"Hobbies of all Users, who live in City with title 'A*': {search_all_hobbies}")
+
+    # Query #5: забрати всіх здобувачів, що працювали в одному закладі (заклад ми не вказуємо)
+    search_all_teammates = connection.query("""
+        OPTIONAL MATCH
+        (us1:User)-[:HAS]->(cv1:CV)-[:HAS]->(cp:Company)<-[:HAS]-(cv2:CV)<-[:HAS]-(us2:User)
+        RETURN us1, us2
+    """)
+    app.logger.info(f"Teammates, who work in same company': {search_all_teammates}")
 
 
 def main():
@@ -148,8 +218,9 @@ def main():
                                      user="neo4j",
                                      pwd="supersecretpassword")
         generator = Neo4jGenerator()
-        # Neo4jInitializer(connection, generator)
-        # Neo4jRemover(connection)
+        neo4jInitializer(connection, generator)
+        neo4jQuerySimulator(connection)
+        neo4jRemover(connection)
         connection.close()
     except Exception as e:
         return f"Error. {e}"

@@ -34,14 +34,17 @@ class Neo4jGenerator:
                           max_items: int = 0,
                           **kwargs):
         children = []
+        primitive_cache = {}
 
         name = kwargs.get('name')
         properties = kwargs.get('properties')
+
+        print(f"Level: {name}, {properties}")
+
         size = min_items + math.floor(random.random() * (max_items - min_items))
 
         for _ in range(size):
             child = {}
-            cache = {}
 
             for property in properties:
                 child_name = property.get('name')
@@ -51,20 +54,20 @@ class Neo4jGenerator:
 
                 if is_primitive:
                     primitive = self.__random_primitive(**property)
-                    if kwargs.get('cache'):
-                        cache_property = cache.get(name)
+                    if kwargs.get('cache') and property.get('cache'):
+                        cache_property = primitive_cache.get(child_name)
                         is_cache_active = cache_property is not None and len(cache_property) > 0
                         if not is_cache_active:
                             child[child_name] = primitive
-                            cache[child_name] = [primitive]
+                            primitive_cache[child_name] = [primitive]
                         else:
                             if random.random() > self.__cache_probability:
                                 primitive_cache_index = round(random.random() * (len(cache_property) - 1))
-                                primitive_cache = cache_property[primitive_cache_index]
-                                child[child_name] = primitive_cache
+                                primitive_cache_value = cache_property[primitive_cache_index]
+                                child[child_name] = primitive_cache_value
                             else:
                                 child[child_name] = primitive
-                                cache_property.append(primitive)
+                                primitive_cache[child_name].append(primitive)
                     else:
                         child[child_name] = primitive
                 else:
@@ -76,6 +79,8 @@ class Neo4jGenerator:
                         child[child_name] = child_children
             children.append(child)
 
+        print(f"Cache: {primitive_cache}")
+
         return children
 
     def random(self, schema: dict) -> dict:
@@ -85,8 +90,8 @@ class Neo4jGenerator:
             raise RuntimeError("Property in Root schema doesn't exist")
         for root_property in root_properties:
             children_name = root_property.get('name')
-            children_property = self.__random_children(**root_property)
-            root_obj[children_name] = children_property
+            children_properties = self.__random_children(**root_property)
+            root_obj[children_name] = children_properties
         return root_obj
 
     def __repr__(self):
