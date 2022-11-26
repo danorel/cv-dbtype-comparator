@@ -69,8 +69,7 @@ Schema = {
                                             'name': 'title',
                                             'instance': 'str',
                                             'range_from': 5,
-                                            'range_to': 15,
-                                            'cache': True
+                                            'range_to': 15
                                         }
                                     ]
                                 }
@@ -85,58 +84,59 @@ Schema = {
 
 
 def neo4jInitializer(connection: Neo4jConnection, generator: Neo4jGenerator):
-    root = generator.random(Schema)
-    for user in root.get('User', []):
-        for cv in user.get('CV', []):
-            [cv_id] = connection.query(f"""
-                CREATE
-                (us:User{{
-                    login: \"{user.get('login')}\",
-                    password: \"{user.get('password')}\"
-                }})
-                -[:HAS]->
-                (cv:CV{{
-                    title: \"{cv.get('title')}\"
-                }})
-                RETURN ID(cv)
-            """)
-            for hobby in cv.get('Hobby', []):
-                connection.query(f"""
-                    MATCH
-                    (cv:CV)
-                    WHERE ID(cv) = {cv_id.value()}
+    records = generator.random(Schema)
+    for record in records:
+        for user in record.get('User', []):
+            for cv in user.get('CV', []):
+                [cv_id] = connection.query(f"""
                     CREATE
-                    (cv)
-                    -[:HAS]->
-                    (hb:Hobby{{
-                        title: \"{hobby.get('title')}\"
+                    (us:User{{
+                        login: \"{user.get('login')}\",
+                        password: \"{user.get('password')}\"
                     }})
-                """)
-            for company in cv.get('Company', []):
-                [company_id] = connection.query(f"""
-                    MATCH
-                    (cv:CV)
-                    WHERE ID(cv) = {cv_id.value()}
-                    CREATE
-                    (cv)
                     -[:HAS]->
-                    (cp:Company{{
-                        title: \"{company.get('title')}\"
+                    (cv:CV{{
+                        title: \"{cv.get('title')}\"
                     }})
-                    RETURN ID(cp)
+                    RETURN ID(cv)
                 """)
-                for city in company.get('City', []):
+                for hobby in cv.get('Hobby', []):
                     connection.query(f"""
                         MATCH
-                        (cp:Company)
-                        WHERE ID(cp) = {company_id.value()}
+                        (cv:CV)
+                        WHERE ID(cv) = {cv_id.value()}
                         CREATE
-                        (cp)
-                        -[:IN]->
-                        (ct:City{{
-                            title: \"{city.get('title')}\"
+                        (cv)
+                        -[:HAS]->
+                        (hb:Hobby{{
+                            title: \"{hobby.get('title')}\"
                         }})
                     """)
+                for company in cv.get('Company', []):
+                    [company_id] = connection.query(f"""
+                        MATCH
+                        (cv:CV)
+                        WHERE ID(cv) = {cv_id.value()}
+                        CREATE
+                        (cv)
+                        -[:HAS]->
+                        (cp:Company{{
+                            title: \"{company.get('title')}\"
+                        }})
+                        RETURN ID(cp)
+                    """)
+                    for city in company.get('City', []):
+                        connection.query(f"""
+                            MATCH
+                            (cp:Company)
+                            WHERE ID(cp) = {company_id.value()}
+                            CREATE
+                            (cp)
+                            -[:IN]->
+                            (ct:City{{
+                                title: \"{city.get('title')}\"
+                            }})
+                        """)
 
 
 def neo4jRemover(connection: Neo4jConnection):
