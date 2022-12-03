@@ -121,8 +121,7 @@ def mongodbInitializer(connection: MongoDBConnection, generator: MongoDBGenerato
                 "password": user.get('password'),
                 "cvs": cvs
             })
-        result = collection.insert_many(users)
-        app.logger.info(f"Result: {result.acknowledged}")
+        collection.insert_many(users)
     pass
 
 
@@ -217,23 +216,58 @@ def mongodbQuerySimulator(connection: MongoDBConnection):
     app.logger.info(f"Cities of User with ID '638b5f2b39c1a807a822e272' in all CVs: {list(user_cities)}")
 
     # # Query #4: забрати хоббі всіх здобувачів, що мешкають в заданому місті
-    # user_hobbies_by_city = connection.query("""
-    #         MATCH (us:User)-[:HAS]->(cv:CV)-[:HAS]->(hb:Hobby)
-    #         MATCH (us:User)-[:HAS]->(cv:CV)-[:HAS]->(cp:Company)-[:IN]->(ct:City)
-    #         WHERE ct.title =~ "^ABC.*"
-    #         RETURN hb, ct
-    #     """)
-    # app.logger.info(f"Hobbies of all Users, who live in City with title 'A*': {user_hobbies_by_city}")
-    #
-    # # Query #5: забрати всіх здобувачів, що працювали в одному закладі (заклад ми не вказуємо)
-    # users_by_company = connection.query("""
-    #         MATCH (us1:User)-[:HAS]->(cv1:CV)-[:HAS]->(cp1:Company)
-    #         MATCH (us2:User)-[:HAS]->(cv2:CV)-[:HAS]->(cp2:Company)
-    #         WHERE cp1.title = cp2.title AND
-    #               ID(us1) <> ID(us2)
-    #         RETURN us1, collect(us2)
-    #     """)
-    # app.logger.info(f"Teammates, who work in same company': {users_by_company}")
+    user_hobbies_by_city = collection \
+        .aggregate([
+        {
+            "$match": {
+                "cvs.companies.cities.title": "TNQSP"
+            }
+        },
+        {
+            "$project": {
+                "_id": False,
+                "hobby": "$cvs.hobbies.title"
+            }
+        },
+        *[{"$unwind": "$hobby"} for _ in range(2)],
+        {
+            "$group": {"_id": "$hobby"}
+        },
+        {
+            "$project": {
+                "_id": False,
+                "hobby": "$_id"
+            }
+        }
+    ])
+    app.logger.info(f"Hobbies of all Users, who live in City with title 'TNQSP': {list(user_hobbies_by_city)}")
+
+    # Query #5: забрати всіх здобувачів, що працювали в одному закладі (заклад ми не вказуємо)
+    users_by_company = collection \
+        .aggregate([
+        {
+            "$project": {
+                "_id": False,
+                "login": True,
+                "company": "$cvs.companies.title"
+            }
+        },
+        *[{"$unwind": "$company"} for _ in range(2)],
+        {
+            "$group": {
+                "_id": "$company",
+                "users": {
+                    "$addToSet": "$login"
+                }
+            }
+        },
+        {
+            "$match": {
+                'users.1': {"$exists": True}
+            }
+        }
+    ])
+    app.logger.info(f"Teammates, who work in same company': {list(users_by_company)}")
     pass
 
 
@@ -242,9 +276,9 @@ def main():
         connection = MongoDBConnection(host="mongodb://mongo:supersecretpassword@mongo:27017",
                                        db="test")
         generator = MongoDBGenerator()
-        # mongodbInitializer(connection, generator)
+        mongodbInitializer(connection, generator)
         mongodbQuerySimulator(connection)
-        # mongodbRemover(connection)
+        mongodbRemover(connection)
         connection.close()
     except Exception as e:
         app.logger.error(f"Error: {e}")
