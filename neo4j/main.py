@@ -153,65 +153,44 @@ def neo4jRemover(connection: Neo4jConnection):
 def neo4jQuerySimulator(connection: Neo4jConnection):
     # Query #1: забрати рюзюме
     search_user_cv = connection.query("""
-        MATCH 
-        (us:User)
-        -[:HAS]->
-        (cv:CV)
-        WHERE us.login =~ "^A.*" AND
-              cv.title =~ "^A.*"
+        MATCH (us:User)-[:HAS]->(cv:CV)
+        WHERE ID(us) = 0
         RETURN cv
     """)
-    app.logger.info(f"CV of User 'A*' in CV with title 'A*': {search_user_cv}")
+    app.logger.info(f"CV of User with ID '0': {search_user_cv}")
 
     # Query #2: забрати всі хоббі які існують в резюме
     search_user_hobbies = connection.query("""
-        MATCH 
-        (us:User)
-        -[:HAS]->
-        (cv:CV)
-        -[:HAS]->
-        (hb:Hobby)
-        WHERE us.login =~ "^A.*" AND
-              cv.title =~ "^A.*"
+        MATCH (us:User)-[:HAS]->(cv:CV)-[:HAS]->(hb:Hobby)
+        WHERE ID(us) = 0
         RETURN hb
     """)
-    app.logger.info(f"Hobbies of User 'A*' in CV with title 'A*': {search_user_hobbies}")
+    app.logger.info(f"Hobbies of User with ID '0' in all CVs: {search_user_hobbies}")
 
     # Query #3: забрати всі міста, що зустрічаються в резюме
     search_user_cities = connection.query("""
-        MATCH
-        (us:User)
-        -[:HAS]->
-        (cv:CV)
-        -[:HAS]->
-        (cp:Company)
-        -[:IN]->
-        (ct:City)
+        MATCH (us:User)-[:HAS]->(cv:CV)-[:HAS]->(cp:Company)-[:IN]->(ct:City)
+        WHERE ID(us) = 0
         RETURN ct
     """)
-    app.logger.info(f"Cities of User 'A*' in CV with title 'A*': {search_user_cities}")
+    app.logger.info(f"Cities of User with ID '0' in all CVs: {search_user_cities}")
 
     # Query #4: забрати хоббі всіх здобувачів, що мешкають в заданому місті
     search_all_hobbies = connection.query("""
-        MATCH 
-        (us:User)
-        -[:HAS]->
-        (cv:CV)
-        -[:HAS]->
-        (hb:Hobby),
-        (cp:Company)
-            -[:IN]->
-            (ct:City)
-        WHERE ct.title =~ "^AB.*"
+        MATCH (us:User)-[:HAS]->(cv:CV)-[:HAS]->(hb:Hobby)
+        MATCH (us:User)-[:HAS]->(cv:CV)-[:HAS]->(cp:Company)-[:IN]->(ct:City)
+        WHERE ct.title =~ "^ABC.*"
         RETURN hb, ct
     """)
     app.logger.info(f"Hobbies of all Users, who live in City with title 'A*': {search_all_hobbies}")
 
     # Query #5: забрати всіх здобувачів, що працювали в одному закладі (заклад ми не вказуємо)
     search_all_teammates = connection.query("""
-        OPTIONAL MATCH
-        (us1:User)-[:HAS]->(cv1:CV)-[:HAS]->(cp:Company)<-[:HAS]-(cv2:CV)<-[:HAS]-(us2:User)
-        RETURN us1, us2
+        MATCH (us1:User)-[:HAS]->(cv1:CV)-[:HAS]->(cp1:Company)
+        MATCH (us2:User)-[:HAS]->(cv2:CV)-[:HAS]->(cp2:Company)
+        WHERE cp1.title = cp2.title AND
+              ID(us1) <> ID(us2)
+        RETURN us1, collect(us2)
     """)
     app.logger.info(f"Teammates, who work in same company': {search_all_teammates}")
 
