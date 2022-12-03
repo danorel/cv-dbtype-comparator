@@ -4,7 +4,7 @@ import random
 from typing import List
 
 
-class Neo4jGenerator:
+class MongoDBGenerator:
     def __init__(self):
         self.__global_cache = {}
 

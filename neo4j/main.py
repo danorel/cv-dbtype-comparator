@@ -38,13 +38,14 @@ Schema = {
                             'name': 'Hobby',
                             'min_items': 1,
                             'max_items': 5,
-                            'cache': True,
                             'properties': [
                                 {
                                     'name': 'title',
                                     'instance': 'str',
                                     'range_from': 3,
-                                    'range_to': 15
+                                    'range_to': 15,
+                                    'cache': True,
+                                    'cache_probability': 0.25
                                 }
                             ]
                         },
@@ -52,13 +53,14 @@ Schema = {
                             'name': 'Company',
                             'min_items': 1,
                             'max_items': 3,
-                            'cache': True,
                             'properties': [
                                 {
                                     'name': 'title',
                                     'instance': 'str',
                                     'range_from': 3,
-                                    'range_to': 15
+                                    'range_to': 15,
+                                    'cache': True,
+                                    'cache_probability': 0.2
                                 },
                                 {
                                     'name': 'City',
@@ -69,7 +71,9 @@ Schema = {
                                             'name': 'title',
                                             'instance': 'str',
                                             'range_from': 5,
-                                            'range_to': 15
+                                            'range_to': 15,
+                                            'cache': True,
+                                            'cache_probability': 0.3
                                         }
                                     ]
                                 }
@@ -175,14 +179,14 @@ def neo4jQuerySimulator(connection: Neo4jConnection):
 
     # Query #3: забрати всі міста, що зустрічаються в резюме
     search_user_cities = connection.query("""
-        MATCH 
+        MATCH
         (us:User)
         -[:HAS]->
         (cv:CV)
         -[:HAS]->
+        (cp:Company)
+        -[:IN]->
         (ct:City)
-        WHERE us.login =~ "^A.*" AND
-              cv.title =~ "^A.*"
         RETURN ct
     """)
     app.logger.info(f"Cities of User 'A*' in CV with title 'A*': {search_user_cities}")
