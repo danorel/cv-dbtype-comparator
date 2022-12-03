@@ -1,7 +1,8 @@
+from bson.objectid import ObjectId
+
 from core.server import app
 from core.db.generator import MongoDBGenerator
 from core.db.connector import MongoDBConnection
-
 
 Schema = {
     'name': 'Root',
@@ -88,19 +89,7 @@ Schema = {
 
 
 def mongodbInitializer(connection: MongoDBConnection, generator: MongoDBGenerator):
-    (
-        user,
-        cv,
-        hobby,
-        company,
-        city
-    ) = (
-        connection.collection("User"),
-        connection.collection("CV"),
-        connection.collection("Hobby"),
-        connection.collection("Company"),
-        connection.collection("City")
-    )
+    collection = connection.collection("UserCV")
     records = generator.random(Schema)
     for record in records:
         users = []
@@ -132,109 +121,133 @@ def mongodbInitializer(connection: MongoDBConnection, generator: MongoDBGenerato
                 "password": user.get('password'),
                 "cvs": cvs
             })
-        cv.insert_many(users)
+        result = collection.insert_many(users)
+        app.logger.info(f"Result: {result.acknowledged}")
     pass
 
 
 def mongodbRemover(connection: MongoDBConnection):
-    (
-        user,
-        cv,
-        hobby,
-        company,
-        city
-    ) = (
-        connection.collection("User"),
-        connection.collection("CV"),
-        connection.collection("Hobby"),
-        connection.collection("Company"),
-        connection.collection("City")
-    )
-    user.drop()
-    cv.drop()
-    hobby.drop()
-    company.drop()
-    city.drop()
+    collection = connection.collection("UserCV")
+    collection.drop()
     pass
 
 
 def mongodbQuerySimulator(connection: MongoDBConnection):
+    collection = connection.collection("UserCV")
+
     # # Query #1: забрати рюзюме
-    # search_user_cv = connection.collection("""
-    #     MATCH
-    #     (us:User)
-    #     -[:HAS]->
-    #     (cv:CV)
-    #     WHERE us.login =~ "^A.*" AND
-    #           cv.title =~ "^A.*"
-    #     RETURN cv
-    # """)
-    # app.logger.info(f"CV of User 'A*' in CV with title 'A*': {search_user_cv}")
-    #
+    user_cvs = collection \
+        .aggregate([
+        {
+            "$match": {
+                "_id": ObjectId("638b5f2b39c1a807a822e272")
+            }
+        },
+        {
+            "$project": {
+                "_id": False,
+                "cv": "$cvs.title"
+            }
+        },
+        *[{"$unwind": "$cv"} for _ in range(1)],
+        {
+            "$group": {"_id": "$cv"}
+        },
+        {
+            "$project": {
+                "_id": False,
+                "cv": "$_id"
+            }
+        }
+    ])
+    app.logger.info(f"CVs of User with ID '638b5f2b39c1a807a822e272': {list(user_cvs)}")
+
     # # Query #2: забрати всі хоббі які існують в резюме
-    # search_user_hobbies = connection.collection("""
-    #     MATCH
-    #     (us:User)
-    #     -[:HAS]->
-    #     (cv:CV)
-    #     -[:HAS]->
-    #     (hb:Hobby)
-    #     WHERE us.login =~ "^A.*" AND
-    #           cv.title =~ "^A.*"
-    #     RETURN hb
-    # """)
-    # app.logger.info(f"Hobbies of User 'A*' in CV with title 'A*': {search_user_hobbies}")
-    #
-    # # Query #3: забрати всі міста, що зустрічаються в резюме
-    # search_user_cities = connection.collection("""
-    #     MATCH
-    #     (us:User)
-    #     -[:HAS]->
-    #     (cv:CV)
-    #     -[:HAS]->
-    #     (cp:Company)
-    #     -[:IN]->
-    #     (ct:City)
-    #     RETURN ct
-    # """)
-    # app.logger.info(f"Cities of User 'A*' in CV with title 'A*': {search_user_cities}")
-    #
+    user_hobbies = collection \
+        .aggregate([
+        {
+            "$match": {
+                "_id": ObjectId("638b5f2b39c1a807a822e272")
+            }
+        },
+        {
+            "$project": {
+                "_id": False,
+                "hobby": "$cvs.hobbies.title"
+            }
+        },
+        *[{"$unwind": "$hobby"} for _ in range(2)],
+        {
+            "$group": {"_id": "$hobby"}
+        },
+        {
+            "$project": {
+                "_id": False,
+                "hobby": "$_id"
+            }
+        }
+    ])
+    app.logger.info(f"Hobbies of User with ID '638b5f2b39c1a807a822e272' in all CVs: {list(user_hobbies)}")
+
+    # Query #3: забрати всі міста, що зустрічаються в резюме
+    user_cities = collection \
+        .aggregate([
+        {
+            "$match": {
+                "_id": ObjectId("638b5f2b39c1a807a822e272")
+            }
+        },
+        {
+            "$project": {
+                "_id": False,
+                "city": "$cvs.companies.cities.title"
+            }
+        },
+        *[{"$unwind": "$city"} for _ in range(3)],
+        {
+            "$group": {"_id": "$city"}
+        },
+        {
+            "$project": {
+                "_id": False,
+                "city": "$_id"
+            }
+        }
+    ])
+    app.logger.info(f"Cities of User with ID '638b5f2b39c1a807a822e272' in all CVs: {list(user_cities)}")
+
     # # Query #4: забрати хоббі всіх здобувачів, що мешкають в заданому місті
-    # search_all_hobbies = connection.collection("""
-    #     MATCH
-    #     (us:User)
-    #     -[:HAS]->
-    #     (cv:CV)
-    #     -[:HAS]->
-    #     (hb:Hobby),
-    #     (cp:Company)
-    #         -[:IN]->
-    #         (ct:City)
-    #     WHERE ct.title =~ "^AB.*"
-    #     RETURN hb, ct
-    # """)
-    # app.logger.info(f"Hobbies of all Users, who live in City with title 'A*': {search_all_hobbies}")
+    # user_hobbies_by_city = connection.query("""
+    #         MATCH (us:User)-[:HAS]->(cv:CV)-[:HAS]->(hb:Hobby)
+    #         MATCH (us:User)-[:HAS]->(cv:CV)-[:HAS]->(cp:Company)-[:IN]->(ct:City)
+    #         WHERE ct.title =~ "^ABC.*"
+    #         RETURN hb, ct
+    #     """)
+    # app.logger.info(f"Hobbies of all Users, who live in City with title 'A*': {user_hobbies_by_city}")
     #
     # # Query #5: забрати всіх здобувачів, що працювали в одному закладі (заклад ми не вказуємо)
-    # search_all_teammates = connection.collection("""
-    #     OPTIONAL MATCH
-    #     (us1:User)-[:HAS]->(cv1:CV)-[:HAS]->(cp:Company)<-[:HAS]-(cv2:CV)<-[:HAS]-(us2:User)
-    #     RETURN us1, us2
-    # """)
-    # app.logger.info(f"Teammates, who work in same company': {search_all_teammates}")
+    # users_by_company = connection.query("""
+    #         MATCH (us1:User)-[:HAS]->(cv1:CV)-[:HAS]->(cp1:Company)
+    #         MATCH (us2:User)-[:HAS]->(cv2:CV)-[:HAS]->(cp2:Company)
+    #         WHERE cp1.title = cp2.title AND
+    #               ID(us1) <> ID(us2)
+    #         RETURN us1, collect(us2)
+    #     """)
+    # app.logger.info(f"Teammates, who work in same company': {users_by_company}")
     pass
 
 
 def main():
     try:
         connection = MongoDBConnection(host="mongodb://mongo:supersecretpassword@mongo:27017",
-                                       db="mongo")
+                                       db="test")
         generator = MongoDBGenerator()
-        mongodbInitializer(connection, generator)
+        # mongodbInitializer(connection, generator)
         mongodbQuerySimulator(connection)
-        mongodbRemover(connection)
+        # mongodbRemover(connection)
         connection.close()
     except Exception as e:
+        app.logger.error(f"Error: {e}")
         return f"Error. {e}"
     return "Success"
 

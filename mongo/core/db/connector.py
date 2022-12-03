@@ -7,7 +7,7 @@ class MongoDBConnection:
         self.__driver = None
         try:
             self.__driver = MongoClient(self.__uri)
-            self.__db = self.__driver[db]
+            self.__db = self.__driver.get_database(name=db)
         except Exception as e:
             print("Failed to create the driver:", e)
 
